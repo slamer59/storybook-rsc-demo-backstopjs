@@ -4,7 +4,8 @@ import NoteEditor from "./note-editor";
 const meta = {
   component: NoteEditor,
   args: {
-    initialTitle: 'This title has changed and PR is closed',
+    //open-pr-long-running-branch
+    initialTitle: 'This title is changed from the long running branch and still open',
     initialBody: 'This is a body',
     noteId: 1,
   }
