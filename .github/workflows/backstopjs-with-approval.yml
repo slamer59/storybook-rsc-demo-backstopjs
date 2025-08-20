@@ -125,37 +125,81 @@ jobs:
             const hasDiffs = '${{ steps.detect-diffs.outputs.diffs }}' === 'true';
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const workflowUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/backstopjs-with-approval.yml`;
+            const approveUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/backstopjs-with-approval.yml?tab=workflows`;
+            const timestamp = new Date().toLocaleString('en-US', { 
+              timeZone: 'UTC', 
+              year: 'numeric', 
+              month: '2-digit', 
+              day: '2-digit', 
+              hour: '2-digit', 
+              minute: '2-digit',
+              second: '2-digit'
+            });
             
             let comment;
             if (hasDiffs) {
               comment = `## 📸 Visual Regression Test Results
             
-            ⚠️ **Visual differences detected**
+            ⚠️ **Visual differences detected** | 🕒 Last updated: ${timestamp} UTC | 🔄 Run #${context.runId}
+            
+            ### 🎯 Quick Approval (if changes are expected):
+            **➡️ [🔄 APPROVE VISUAL CHANGES](${approveUrl})** ← Click this button!
+            
+            Then: **"Run workflow"** → Select branch → Check **"approve_changes" ☑️** → **"Run workflow"**
             
             ### 📋 What to do next:
             1. **Review Changes**: Download the \`visual-diff-report-${context.runId}\` artifact to see detailed visual differences
-            2. **If Expected**: Use [workflow dispatch](${workflowUrl}) with "approve_changes" set to true
+            2. **If Expected**: Click the approve button above or go to [Actions](${workflowUrl})
             3. **If Unexpected**: Fix the visual issues and push new changes
             
             ### 📊 Artifacts Available:
-            - 🔍 [Visual Diff Report](${runUrl}#artifacts) - Detailed comparison
+            - 🔍 [Visual Diff Report](${runUrl}#artifacts) - Detailed side-by-side comparison
             - 📦 [Complete BackstopJS Data](${runUrl}#artifacts) - Full test data
             
-            🔄 **Approve Command**: Go to [Actions](${workflowUrl}) → "Run workflow" → Check "approve_changes" → Run workflow`;
+            ### 🔄 Manual Steps:
+            1. Click **[APPROVE VISUAL CHANGES](${approveUrl})** button above
+            2. Select branch: \`${context.ref.replace('refs/heads/', '')}\`
+            3. Check **"approve_changes"** checkbox ☑️
+            4. Click **"Run workflow"** button`;
             } else {
               comment = `## 📸 Visual Regression Test Results
             
-            ✅ **No visual differences detected**
+            ✅ **No visual differences detected** | 🕒 Last updated: ${timestamp} UTC | 🔄 Run #${context.runId}
             
             All visual elements match the baseline references. Great job! 🎉`;
             }
             
-            await github.rest.issues.createComment({
+            // Look for existing comment from this bot
+            const comments = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: comment
             });
+            
+            const botComment = comments.data.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('📸 Visual Regression Test Results')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                comment_id: botComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+              console.log('Updated existing comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+              console.log('Created new comment');
+            }
 
       - name: Fail if differences detected and not approving
         if: steps.detect-diffs.outputs.diffs == 'true' && github.event.inputs.approve_changes != 'true'
